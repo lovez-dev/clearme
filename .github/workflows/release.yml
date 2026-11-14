@@ -1,0 +1,67 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: "0.17.1"
+
+      - run: zig build fmt
+      - run: zig build test
+      - if: runner.os == 'Linux'
+        run: sh -n install.sh
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: "0.17.1"
+
+      - name: Read version
+        id: version
+        run: echo "version=$(sed -n 's/.*version = \"\([^\"]*\)\".*/\1/p' src/version.zig)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag version
+        if: github.ref_type == 'tag'
+        run: test "${GITHUB_REF_NAME#v}" = "${{ steps.version.outputs.version }}"
+
+      - name: Build
+        run: |
+          set -eu
+          make checksums
+          cat dist/sha256sums.txt
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: clearme v${{ steps.version.outputs.version }}
+          overwrite_files: true
+          make_latest: true
+          files: |
+            dist/clearme-amd64
+            dist/clearme-arm64
+            dist/sha256sums.txt
+            install.sh

@@ -1,0 +1,28 @@
+#!/bin/sh
+# Off-subnet IPv4 gateways require a host route; netcfg's subnet widening
+# changes the provider's prefix. Also handles static IPv6-only installation.
+set -eu
+ip link set dev '{{.Interface}}' up
+{{if .IP}}
+ip -4 addr replace '{{.IP}}/{{.IPPrefix}}' dev '{{.Interface}}'
+ip -4 route replace '{{.Gateway}}/32' dev '{{.Interface}}'
+ip -4 route replace default via '{{.Gateway}}' dev '{{.Interface}}' onlink
+{{end}}
+{{if .InstallerV6Interface}}
+ip link set dev '{{.InstallerV6Interface}}' up
+{{end}}
+{{if .InstallerV6Address}}
+v6_iface='{{if .InstallerV6Interface}}{{.InstallerV6Interface}}{{else}}{{.Interface}}{{end}}'
+ip -6 addr replace '{{.InstallerV6Address}}/{{.InstallerV6Prefix}}' dev "$v6_iface"
+{{if .InstallerV6Gateway}}
+ip -6 route replace '{{.InstallerV6Gateway}}/128' dev "$v6_iface"
+ip -6 route replace default via '{{.InstallerV6Gateway}}' dev "$v6_iface" onlink
+{{end}}{{end}}
+cat > /etc/resolv.conf <<'RESOLV'
+{{.ResolvConf}}RESOLV
+printf '%s\n' '{{.Hostname}}' > /etc/hostname
+hostname '{{.Hostname}}'
+mkdir -p /etc/network
+cat > /etc/network/interfaces <<'IFACES'
+{{.Interfaces}}IFACES
+exit 0

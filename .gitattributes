@@ -1,0 +1,2 @@
+# Use LF line endings, including shell scripts checked out on Windows.
+* text=auto eol=lf

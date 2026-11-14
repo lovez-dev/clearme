@@ -1,0 +1,11 @@
+/dist/
+/clearme
+/clearme.exe
+/clearme.log
+/.zig-cache/
+/zig-out/
+/out-*/
+/.refgo/
+/tmp/
+__pycache__/
+*.pyc
