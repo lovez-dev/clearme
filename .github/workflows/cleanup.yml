@@ -1,0 +1,84 @@
+name: cleanup
+
+# Run monthly at 03:00 UTC on day 1; manual runs support preview mode.
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+    inputs:
+      keep_releases:
+        description: Number of recent releases to keep
+        type: string
+        default: "5"
+      keep_runs:
+        description: Number of recent workflow runs to keep
+        type: string
+        default: "30"
+      dry_run:
+        description: List items to delete without deleting them
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: cleanup
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune old releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: ${{ github.event.inputs.keep_releases || '5' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -eu
+          case "$KEEP" in '' | *[!0-9]*) KEEP=5 ;; esac
+          [ "$KEEP" -ge 1 ] || KEEP=1
+
+          # Keep the newest KEEP releases by creation time; retain Git tags.
+          tags=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq 'sort_by(.created_at) | reverse | .[].tag_name' || true)
+          n=0
+          for tag in $tags; do
+            n=$((n + 1))
+            [ "$n" -le "$KEEP" ] && continue
+            if [ "$DRY_RUN" = true ]; then
+              echo "Would delete release: $tag"
+            else
+              echo "Deleting release: $tag"
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          done
+          echo "Release cleanup complete: keeping the newest $KEEP of $n releases"
+
+      - name: Prune old workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: ${{ github.event.inputs.keep_runs || '30' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -eu
+          case "$KEEP" in '' | *[!0-9]*) KEEP=30 ;; esac
+          [ "$KEEP" -ge 1 ] || KEEP=1
+
+          # gh run list returns newest runs first; keep the first KEEP runs.
+          ids=$(gh run list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            --json databaseId --jq '.[].databaseId')
+          n=0
+          for id in $ids; do
+            n=$((n + 1))
+            [ "$n" -le "$KEEP" ] && continue
+            if [ "$DRY_RUN" = true ]; then
+              echo "Would delete run: $id"
+            else
+              echo "Deleting run: $id"
+              gh run delete "$id" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+          echo "Run cleanup complete: keeping the newest $KEEP of $n runs"

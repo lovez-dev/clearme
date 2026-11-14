@@ -1,0 +1,58 @@
+{
+  "Interface": "eth0",
+  "Static": true,
+  "IP": "192.0.2.10",
+  "Netmask": "255.255.255.0",
+  "Gateway": "192.0.2.1",
+  "DNS": "1.1.1.1 2606:4700:4700::1111",
+  "Hostname": "example",
+  "Interfaces": "auto lo\niface lo inet loopback\nauto eth0\niface eth0 inet static\n    address 192.0.2.10/24\n",
+  "ResolvConf": "nameserver 1.1.1.1\n",
+  "MirrorProtocol": "https",
+  "MirrorHost": "deb.debian.org",
+  "MirrorDir": "/debian",
+  "Suite": "trixie",
+  "SecurityRepo": "https://deb.debian.org/debian-security",
+  "SecuritySuite": "trixie-security",
+  "Timezone": "Asia/Shanghai",
+  "NTP": "time.cloudflare.com",
+  "Disk": "/dev/sda",
+  "DiskLabel": "msdos",
+  "EFI": false,
+  "ESPSize": 106,
+  "Filesystem": "btrfs",
+  "BtrfsCompress": "zstd:3",
+  "KeepParts": [
+    2,
+    4
+  ],
+  "Arch": "arm64",
+  "NonFreeFirmware": true,
+  "Username": "deploy",
+  "PasswordHash": "$6$salt$referencehash",
+  "Install": "ca-certificates ifupdown",
+  "Upgrade": "full-upgrade",
+  "SSHPort": 2222,
+  "AuthorizedKeys": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAreference user@example\n",
+  "KeepFstab": [
+    {
+      "PartUUID": "ref-uuid",
+      "MountPoint": "/data",
+      "FSType": "ext4",
+      "Pass": 2
+    }
+  ],
+  "Optimize": true,
+  "Swap": true,
+  "SwapSize": "2G",
+  "SwapMB": 2048,
+  "Packages": "curl nginx",
+  "PostInstall": "#!/bin/sh\nprintf '%s\\n' \"hello '$world'\"\n",
+  "ExtraRepos": [
+    "deb https://example.org/debian trixie main"
+  ],
+  "Unattended": true,
+  "Fail2ban": true,
+  "Proxy": "http://127.0.0.1:3128",
+  "InstallerSSH": true
+}

@@ -1,0 +1,14 @@
+.{
+    .name = .clearme,
+    .version = "0.1.0",
+    .fingerprint = 0x30b2127f6c287895,
+    .minimum_zig_version = "0.17.1",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}

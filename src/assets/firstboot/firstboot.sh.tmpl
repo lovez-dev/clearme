@@ -1,0 +1,85 @@
+#!/bin/sh
+set -u
+mkdir -p /var/lib/clearme
+LOG=/var/log/clearme-firstboot.log
+exec >>"$LOG" 2>&1
+step=starting
+fail() {
+    code=$1
+    printf 'failed: %s (%s)\n' "$step" "$code" > /var/lib/clearme/firstboot-status
+    systemctl disable clearme-firstboot.service 2>/dev/null || true
+    exit "$code"
+}
+printf 'running\n' > /var/lib/clearme/firstboot-status
+export DEBIAN_FRONTEND=noninteractive
+i=0
+while [ "$i" -lt 30 ]; do
+    getent hosts deb.debian.org >/dev/null 2>&1 && break
+    i=$((i + 1))
+    sleep 2
+done
+{{if .ExtraRepos}}
+step=extra-repositories
+apt-get update -y || fail $?
+{{if .Packages}}apt-get install -y --no-install-recommends {{.Packages}} || fail $?
+{{end}}{{end}}
+if [ -d /root/.clearme/optimize ]; then
+    for f in /root/.clearme/optimize/*.sh; do
+        [ -f "$f" ] || continue
+        step="optimize/${f##*/}"
+        sh "$f" || fail $?
+    done
+fi
+{{if .PostInstallB64}}
+step=post-install
+echo {{.PostInstallB64}} | base64 -d > /root/.clearme/post-install.sh || fail $?
+chmod 700 /root/.clearme/post-install.sh
+sh /root/.clearme/post-install.sh || fail $?
+rm -f /root/.clearme/post-install.sh
+{{end}}{{if .Swap}}
+step=swap
+if ! swapon --show --noheadings 2>/dev/null | grep -q .; then
+    : > /swapfile
+    chattr +C /swapfile 2>/dev/null || true
+    btrfs property set /swapfile compression none 2>/dev/null || true
+    fallocate -l {{.SwapSize}} /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count={{.SwapMB}} 2>/dev/null || fail $?
+    chmod 600 /swapfile
+    mkswap /swapfile || fail $?
+    swapon /swapfile || fail $?
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+{{end}}
+if [ -x /root/.clearme/cleanup.sh ]; then
+    running="$(uname -r)"
+    newest="$(ls /boot/vmlinuz-* 2>/dev/null | sed 's|.*/vmlinuz-||' | sort -V | tail -n 1)"
+    if [ -n "$newest" ] && [ "$newest" != "$running" ]; then
+        cat > /etc/systemd/system/clearme-cleanup.service <<'UNIT'
+[Unit]
+Description=clearme post-upgrade cleanup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/root/.clearme/cleanup.sh
+[Service]
+Type=oneshot
+ExecStart=/root/.clearme/cleanup.sh
+[Install]
+WantedBy=multi-user.target
+UNIT
+        ln -sf /etc/systemd/system/clearme-cleanup.service /etc/systemd/system/multi-user.target.wants/clearme-cleanup.service
+        printf 'pending: reboot into %s\n' "$newest" > /var/lib/clearme/cleanup-status
+    else
+        step=cleanup
+        sh /root/.clearme/cleanup.sh || fail $?
+    fi
+fi
+printf 'complete\n' > /var/lib/clearme/firstboot-status
+systemctl disable clearme-firstboot.service 2>/dev/null || true
+rm -f /etc/systemd/system/clearme-firstboot.service /etc/systemd/system/multi-user.target.wants/clearme-firstboot.service
+rm -f /etc/systemd/system/cloud-init.target.wants/clearme-firstboot.service
+rm -f /root/.clearme/firstboot.sh
+rm -rf /root/.clearme/optimize
+rmdir /root/.clearme 2>/dev/null || true
+rm -f /var/log/clearme-installer-ssh.log
+rm -rf /var/log/installer
+rm -f "$LOG"
+systemctl daemon-reload 2>/dev/null || true
